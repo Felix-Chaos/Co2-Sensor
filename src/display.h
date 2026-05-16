@@ -2,6 +2,9 @@
 #include <TFT_eSPI.h>
 #include "config.h"
 
+extern unsigned long win1OpenTime;
+extern unsigned long win2OpenTime;
+
 #define BG          0x0000
 #define CARD        0x18E3
 #define CARD_HI     0x2945
@@ -212,6 +215,22 @@ public:
         drawBottomBar();
     }
 
+    // ================ HELPER ================
+    void formatDuration(unsigned long openTime, char* out, size_t len) {
+        if (openTime == 0) {
+            snprintf(out, len, "!");
+            return;
+        }
+        unsigned long elapsedSec = (millis() - openTime) / 1000;
+        if (elapsedSec < 60) {
+            snprintf(out, len, "%lus", elapsedSec);
+        } else if (elapsedSec < 3600) {
+            snprintf(out, len, "%lum", elapsedSec / 60);
+        } else {
+            snprintf(out, len, "%luh", elapsedSec / 3600);
+        }
+    }
+
     // ================ SCREEN 0 — Dashboard ================
     void drawScreen0() {
         spr.fillRoundRect(2,2,130,52,4,CARD);
@@ -245,10 +264,17 @@ public:
         spr.setTextFont(2);spr.setTextColor(heating?C_RED:DIM,CARD);spr.drawString(heating?"Heat ON":"Heat",rx+18,ry+2);ry+=rh+2;
         uint16_t doorC=doorOpen?C_ORANGE:DARK;iconDoor(rx+5,ry+2,doorC);
         spr.setTextColor(doorOpen?C_ORANGE:DIM,CARD);spr.drawString(doorOpen?"Door !":"Door",rx+18,ry+2);ry+=rh+2;
+        char w1Str[16];
+        if (window1Open) { char d[8]; formatDuration(win1OpenTime, d, 8); snprintf(w1Str, 16, "W1 %s", d); }
+        else { snprintf(w1Str, 16, "Win 1"); }
         uint16_t w1C=window1Open?C_BLUE:DARK;iconWindow(rx+3,ry+3,w1C);
-        spr.setTextColor(window1Open?C_BLUE:DIM,CARD);spr.drawString(window1Open?"Win1 !":"Win 1",rx+18,ry+2);ry+=rh+2;
+        spr.setTextColor(window1Open?C_BLUE:DIM,CARD);spr.drawString(w1Str,rx+18,ry+2);ry+=rh+2;
+
+        char w2Str[16];
+        if (window2Open) { char d[8]; formatDuration(win2OpenTime, d, 8); snprintf(w2Str, 16, "W2 %s", d); }
+        else { snprintf(w2Str, 16, "Win 2"); }
         uint16_t w2C=window2Open?C_BLUE:DARK;iconWindow(rx+3,ry+3,w2C);
-        spr.setTextColor(window2Open?C_BLUE:DIM,CARD);spr.drawString(window2Open?"Win2 !":"Win 2",rx+18,ry+2);ry+=rh+2;
+        spr.setTextColor(window2Open?C_BLUE:DIM,CARD);spr.drawString(w2Str,rx+18,ry+2);ry+=rh+2;
         uint16_t stC=stairMotion?C_YELLOW:DARK;iconStairs(rx+4,ry+3,stC);
         spr.setTextColor(stairMotion?C_YELLOW:DIM,CARD);spr.drawString(stairMotion?"Move!":"Stairs",rx+18,ry+2);
     }
@@ -278,10 +304,17 @@ public:
         spr.drawString(heating?"Heating ON":"Heating OFF",24,y+2);y+=rh+2;
         iconDoor(9,y+2,doorOpen?C_ORANGE:DARK);spr.setTextColor(doorOpen?C_ORANGE:DIM,CARD);
         spr.drawString(doorOpen?"Door OPEN":"Door Closed",24,y+2);y+=rh+2;
+        char w1Str2[24];
+        if (window1Open) { char d[8]; formatDuration(win1OpenTime, d, 8); snprintf(w1Str2, 24, "Win1 OPEN %s", d); }
+        else { snprintf(w1Str2, 24, "Win1 Closed"); }
         iconWindow(7,y+3,window1Open?C_BLUE:DARK);spr.setTextColor(window1Open?C_BLUE:DIM,CARD);
-        spr.drawString(window1Open?"Win1 OPEN":"Win1 Closed",24,y+2);y+=rh+2;
+        spr.drawString(w1Str2,24,y+2);y+=rh+2;
+
+        char w2Str2[24];
+        if (window2Open) { char d[8]; formatDuration(win2OpenTime, d, 8); snprintf(w2Str2, 24, "Win2 OPEN %s", d); }
+        else { snprintf(w2Str2, 24, "Win2 Closed"); }
         iconWindow(7,y+3,window2Open?C_BLUE:DARK);spr.setTextColor(window2Open?C_BLUE:DIM,CARD);
-        spr.drawString(window2Open?"Win2 OPEN":"Win2 Closed",24,y+2);y+=rh+2;
+        spr.drawString(w2Str2,24,y+2);y+=rh+2;
         iconStairs(8,y+3,stairMotion?C_YELLOW:DARK);spr.setTextColor(stairMotion?C_YELLOW:DIM,CARD);
         spr.drawString(stairMotion?"Motion!":"Stairs Clear",24,y+2);
         spr.fillRoundRect(122,2,SW-124,108,4,CARD);y=6;
