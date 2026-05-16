@@ -41,6 +41,10 @@ unsigned long stairAlertTime=0;
 bool stairWasActive=false;
 unsigned long co2InfoTime=0;
 bool co2InfoWasActive=false;
+unsigned long win1GoodAlertTime=0;
+bool win1GoodWasActive=false;
+unsigned long win2GoodAlertTime=0;
+bool win2GoodWasActive=false;
 
 #define TIMED_ALERT_MS 20000  // 20 seconds
 
@@ -265,15 +269,28 @@ void checkAlerts() {
         return;
     }
 
-    // INFO: Window open > 5 min → thumbs up
-    if (win1OpenTime > 0 && (now - win1OpenTime) > WIN_GOOD_MS && (now - win1OpenTime) <= WIN_CLOSE_MS && !isDismissed(AID_WIN1_GOOD)) {
+    // INFO: Window open > 5 min → thumbs up (20s notification)
+    bool win1Good = (win1OpenTime > 0 && (now - win1OpenTime) > WIN_GOOD_MS && (now - win1OpenTime) <= WIN_CLOSE_MS);
+    if (win1Good && !win1GoodWasActive && !justBooted) win1GoodAlertTime = now;
+    if (!win1Good) { win1GoodWasActive = false; win1GoodAlertTime = 0; }
+    if (win1Good) win1GoodWasActive = true;
+
+    if (win1GoodAlertTime > 0 && (now - win1GoodAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_WIN1_GOOD)) {
         display.setAlert(AT_INFO, AID_WIN1_GOOD, "WINDOW 1", "Great ventilation!");
         return;
     }
-    if (win2OpenTime > 0 && (now - win2OpenTime) > WIN_GOOD_MS && (now - win2OpenTime) <= WIN_CLOSE_MS && !isDismissed(AID_WIN2_GOOD)) {
+    if (win1GoodAlertTime > 0 && (now - win1GoodAlertTime) >= TIMED_ALERT_MS) win1GoodAlertTime = 0;
+
+    bool win2Good = (win2OpenTime > 0 && (now - win2OpenTime) > WIN_GOOD_MS && (now - win2OpenTime) <= WIN_CLOSE_MS);
+    if (win2Good && !win2GoodWasActive && !justBooted) win2GoodAlertTime = now;
+    if (!win2Good) { win2GoodWasActive = false; win2GoodAlertTime = 0; }
+    if (win2Good) win2GoodWasActive = true;
+
+    if (win2GoodAlertTime > 0 && (now - win2GoodAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_WIN2_GOOD)) {
         display.setAlert(AT_INFO, AID_WIN2_GOOD, "WINDOW 2", "Great ventilation!");
         return;
     }
+    if (win2GoodAlertTime > 0 && (now - win2GoodAlertTime) >= TIMED_ALERT_MS) win2GoodAlertTime = 0;
 
     // No alert conditions → clear
     display.clearAlert();
