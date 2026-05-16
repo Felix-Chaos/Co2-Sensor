@@ -52,6 +52,10 @@ The display has **3 screens**, switchable via hardware buttons or Home Assistant
 | Sensor | Sensirion SCD30 (CO2, Temperature, Humidity) via I2C |
 | Pins | Buttons GPIO 0/35 · I2C GPIO 21/22 · Backlight GPIO 4 |
 
+### 🖨️ 3D Printable Case
+We have included a custom-designed **45-Degree Desktop Stand** case for this exact hardware combination! It angles the display perfectly for your desk while ensuring massive airflow for the SCD30 to prevent heat soak from the ESP32.
+* STL files and Printables upload text are available in the [`3d_print/`](3d_print/) folder.
+
 ## 📦 Setup
 
 ### 1. Prerequisites
