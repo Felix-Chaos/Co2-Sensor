@@ -37,6 +37,7 @@ unsigned long doorOpenTime=0;
 bool doorWasOpen=false;
 
 // Timed alert tracking (20s auto-dismiss)
+unsigned long doorAlertTime=0;
 unsigned long stairAlertTime=0;
 bool stairWasActive=false;
 unsigned long co2InfoTime=0;
@@ -200,17 +201,20 @@ void checkAlerts() {
     if (!display.window2Open) win2OpenTime = 0;
     win2WasOpen = display.window2Open;
 
+    if (display.doorOpen && !doorWasOpen) doorOpenTime = now;
+    if (!display.doorOpen) doorOpenTime = 0;
+    
     // Check conditions in priority order (highest first)
     // ALARM: Door opened (10-second notification)
-    if (display.doorOpen && !doorWasOpen && !justBooted) doorOpenTime = now; // rising edge
+    if (display.doorOpen && !doorWasOpen && !justBooted) doorAlertTime = now; // rising edge
     if (!display.doorOpen) doorWasOpen = false;
     if (display.doorOpen) doorWasOpen = true;
 
-    if (doorOpenTime > 0 && (now - doorOpenTime) < DOOR_ALERT_MS && !isDismissed(AID_DOOR)) {
+    if (doorAlertTime > 0 && (now - doorAlertTime) < DOOR_ALERT_MS && !isDismissed(AID_DOOR)) {
         display.setAlert(AT_ALARM, AID_DOOR, "DOOR OPEN!", "Door was opened!");
         return;
     }
-    if (doorOpenTime > 0 && (now - doorOpenTime) >= DOOR_ALERT_MS) doorOpenTime = 0; // auto-clear
+    if (doorAlertTime > 0 && (now - doorAlertTime) >= DOOR_ALERT_MS) doorAlertTime = 0; // auto-clear
 
     // WARNING: Stair motion (20s notification)
     if (display.stairMotion && !stairWasActive && !justBooted) stairAlertTime = now;

@@ -4,6 +4,7 @@
 
 extern unsigned long win1OpenTime;
 extern unsigned long win2OpenTime;
+extern unsigned long doorOpenTime;
 
 #define BG          0x0000
 #define CARD        0x18E3
@@ -262,8 +263,12 @@ public:
         spr.fillRoundRect(rx,ry,SW-rx-2,108,4,CARD);
         uint16_t heatC=heating?C_RED:DARK;iconFlame(rx+4,ry+3,heatC);
         spr.setTextFont(2);spr.setTextColor(heating?C_RED:DIM,CARD);spr.drawString(heating?"Heat ON":"Heat",rx+18,ry+2);ry+=rh+2;
+
+        char doorStr[16];
+        if (doorOpen) { char d[8]; formatDuration(doorOpenTime, d, 8); snprintf(doorStr, 16, "Door %s", d); }
+        else { snprintf(doorStr, 16, "Door"); }
         uint16_t doorC=doorOpen?C_ORANGE:DARK;iconDoor(rx+5,ry+2,doorC);
-        spr.setTextColor(doorOpen?C_ORANGE:DIM,CARD);spr.drawString(doorOpen?"Door !":"Door",rx+18,ry+2);ry+=rh+2;
+        spr.setTextColor(doorOpen?C_ORANGE:DIM,CARD);spr.drawString(doorStr,rx+18,ry+2);ry+=rh+2;
         char w1Str[16];
         if (window1Open) { char d[8]; formatDuration(win1OpenTime, d, 8); snprintf(w1Str, 16, "W1 %s", d); }
         else { snprintf(w1Str, 16, "Win 1"); }
@@ -302,8 +307,12 @@ public:
         spr.fillRoundRect(2,2,116,108,4,CARD);
         iconFlame(8,y+3,heating?C_RED:DARK);spr.setTextFont(2);spr.setTextColor(heating?C_RED:DIM,CARD);
         spr.drawString(heating?"Heating ON":"Heating OFF",24,y+2);y+=rh+2;
+
+        char doorStr2[24];
+        if (doorOpen) { char d[8]; formatDuration(doorOpenTime, d, 8); snprintf(doorStr2, 24, "Door OPEN %s", d); }
+        else { snprintf(doorStr2, 24, "Door Closed"); }
         iconDoor(9,y+2,doorOpen?C_ORANGE:DARK);spr.setTextColor(doorOpen?C_ORANGE:DIM,CARD);
-        spr.drawString(doorOpen?"Door OPEN":"Door Closed",24,y+2);y+=rh+2;
+        spr.drawString(doorStr2,24,y+2);y+=rh+2;
         char w1Str2[24];
         if (window1Open) { char d[8]; formatDuration(win1OpenTime, d, 8); snprintf(w1Str2, 24, "Win1 OPEN %s", d); }
         else { snprintf(w1Str2, 24, "Win1 Closed"); }
