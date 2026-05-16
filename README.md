@@ -24,6 +24,8 @@ A real-time CO2 monitoring dashboard built on the **ESP32 TTGO T-Display**, inte
 
 The display has **3 screens**, switchable via hardware buttons or Home Assistant:
 
+<img src="docs/ui_dashboard.png" width="300" /> <img src="docs/ui_ha_detail.png" width="300" />
+
 1. **Dashboard** — CO2 bar + temp/humidity + HA sensor grid
 2. **Clock** — Large clock with date and environmental summary
 3. **HA Detail** — Full-size HA sensor status with labels
