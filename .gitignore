@@ -1,0 +1,21 @@
+.pio
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch
+.vscode/settings.json
+.cache
+
+# Secrets
+.env
+
+# Build artifacts
+compile_commands.json
+
+# Flash backups
+*.bin
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
