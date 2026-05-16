@@ -60,6 +60,13 @@
 #define MQTT_CMD_BRIGHTNESS     "cmnd/co2_sensor/brightness"
 #define MQTT_CMD_SCREEN         "cmnd/co2_sensor/screen"
 
+// Alert toggles from HA
+#define MQTT_CMD_ALERT_DOOR     "cmnd/co2_sensor/alert/door"
+#define MQTT_CMD_ALERT_STAIRS   "cmnd/co2_sensor/alert/stairs"
+#define MQTT_CMD_ALERT_WINDOWS  "cmnd/co2_sensor/alert/windows"
+#define MQTT_CMD_ALERT_CO2      "cmnd/co2_sensor/alert/co2"
+#define MQTT_CMD_ALERT_TEMPHUM  "cmnd/co2_sensor/alert/temphum"
+
 // ============================================================================
 //  Buttons (TTGO T-Display)
 // ============================================================================

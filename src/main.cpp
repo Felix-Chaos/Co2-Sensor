@@ -52,6 +52,13 @@ bool win2GoodWasActive=false;
 // Alert dismiss tracking (epoch seconds)
 time_t dismissUntil[ALERT_ID_COUNT] = {0};
 
+// Alert toggles
+bool enableAlertDoor = true;
+bool enableAlertStairs = true;
+bool enableAlertWindows = true;
+bool enableAlertCO2 = true;
+bool enableAlertTempHum = true;
+
 // ============================================================================
 //  Preferences
 // ============================================================================
@@ -64,6 +71,11 @@ void loadPrefs() {
     strncpy(srcWin1,prefs.getString("sWin1","none").c_str(),127);
     strncpy(srcWin2,prefs.getString("sWin2","none").c_str(),127);
     strncpy(srcHeat,prefs.getString("sHeat","none").c_str(),127);
+    enableAlertDoor = (prefs.getString("alDoor", "1") == "1");
+    enableAlertStairs = (prefs.getString("alStairs", "1") == "1");
+    enableAlertWindows = (prefs.getString("alWindows", "1") == "1");
+    enableAlertCO2 = (prefs.getString("alCO2", "1") == "1");
+    enableAlertTempHum = (prefs.getString("alTempHum", "1") == "1");
     prefs.end();
 }
 void savePref(const char*k,const char*v){prefs.begin("co2cfg",false);prefs.putString(k,v);prefs.end();}
@@ -74,6 +86,8 @@ void savePref(const char*k,const char*v){prefs.begin("co2cfg",false);prefs.putSt
 void setupWiFi(){WiFi.mode(WIFI_STA);WiFi.begin(WIFI_SSID,WIFI_PASSWORD);int a=0;while(WiFi.status()!=WL_CONNECTED&&a<40){delay(500);a++;}display.wifiConnected=(WiFi.status()==WL_CONNECTED);}
 void setupTime(){configTime(GMT_OFFSET_SEC,DAYLIGHT_OFFSET_SEC,NTP_SERVER);}
 void updateTime(){struct tm ti;if(getLocalTime(&ti,100)){display.hour=ti.tm_hour;display.minute=ti.tm_min;display.weekday=ti.tm_wday;display.day=ti.tm_mday;display.month=ti.tm_mon;display.updateBrightness();display.needsRedraw=true;}}
+
+void publishDeviceState();
 
 // ============================================================================
 //  MQTT Discovery
@@ -111,6 +125,19 @@ void publishDiscovery() {
         snprintf(p,512,"{\"name\":\"%s\",\"stat_t\":\"%s\",\"val_tpl\":\"{{ value_json.%s }}\",\"cmd_t\":\"cmnd/co2_sensor/%s\",\"uniq_id\":\"%s_%s\",\"ent_cat\":\"config\",\"icon\":\"%s\",\"min\":0,\"max\":127,\"avty_t\":\"%s\",%s}",sr[i].n,MQTT_SOURCES_TOPIC,sr[i].s,sr[i].s,D,sr[i].s,sr[i].ic,A,devR);
         mqtt.publish(t,p,true);
     }
+
+    struct {const char* n; const char* tp; const char* id;} sw[] = {
+        {"Door Alert", MQTT_CMD_ALERT_DOOR, "door"},
+        {"Stairs Alert", MQTT_CMD_ALERT_STAIRS, "stairs"},
+        {"Windows Alert", MQTT_CMD_ALERT_WINDOWS, "windows"},
+        {"CO2 Alert", MQTT_CMD_ALERT_CO2, "co2"},
+        {"Temp/Hum Alert", MQTT_CMD_ALERT_TEMPHUM, "temphum"}
+    };
+    for(int i=0;i<5;i++){
+        snprintf(t,128,"homeassistant/switch/%s/alert_%s/config",D,sw[i].id);
+        snprintf(p,512,"{\"name\":\"%s\",\"stat_t\":\"%s\",\"val_tpl\":\"{{ value_json.al_%s }}\",\"cmd_t\":\"%s\",\"uniq_id\":\"%s_al_%s\",\"ent_cat\":\"config\",\"icon\":\"mdi:bell\",\"avty_t\":\"%s\",%s}",sw[i].n,MQTT_DEVICE_TOPIC,sw[i].id,sw[i].tp,D,sw[i].id,A,devR);
+        mqtt.publish(t,p,true);
+    }
 }
 
 void publishSources(){
@@ -144,6 +171,11 @@ void mqttCallback(char*topic,byte*payload,unsigned int length){
     else if(sT=="cmnd/co2_sensor/src_win1"){strncpy(srcWin1,msg,127);savePref("sWin1",msg);publishSources();}
     else if(sT=="cmnd/co2_sensor/src_win2"){strncpy(srcWin2,msg,127);savePref("sWin2",msg);publishSources();}
     else if(sT=="cmnd/co2_sensor/src_heat"){strncpy(srcHeat,msg,127);savePref("sHeat",msg);publishSources();}
+    else if(sT==MQTT_CMD_ALERT_DOOR){enableAlertDoor=active;savePref("alDoor",active?"1":"0");publishDeviceState();}
+    else if(sT==MQTT_CMD_ALERT_STAIRS){enableAlertStairs=active;savePref("alStairs",active?"1":"0");publishDeviceState();}
+    else if(sT==MQTT_CMD_ALERT_WINDOWS){enableAlertWindows=active;savePref("alWindows",active?"1":"0");publishDeviceState();}
+    else if(sT==MQTT_CMD_ALERT_CO2){enableAlertCO2=active;savePref("alCO2",active?"1":"0");publishDeviceState();}
+    else if(sT==MQTT_CMD_ALERT_TEMPHUM){enableAlertTempHum=active;savePref("alTempHum",active?"1":"0");publishDeviceState();}
     display.needsRedraw=true;
 }
 
@@ -161,12 +193,21 @@ void connectMQTT(){
         mqtt.subscribe("cmnd/co2_sensor/src_temp");mqtt.subscribe("cmnd/co2_sensor/src_hum");
         mqtt.subscribe("cmnd/co2_sensor/src_stair");mqtt.subscribe("cmnd/co2_sensor/src_door");
         mqtt.subscribe("cmnd/co2_sensor/src_win1");mqtt.subscribe("cmnd/co2_sensor/src_win2");mqtt.subscribe("cmnd/co2_sensor/src_heat");
+        mqtt.subscribe(MQTT_CMD_ALERT_DOOR);mqtt.subscribe(MQTT_CMD_ALERT_STAIRS);mqtt.subscribe(MQTT_CMD_ALERT_WINDOWS);
+        mqtt.subscribe(MQTT_CMD_ALERT_CO2);mqtt.subscribe(MQTT_CMD_ALERT_TEMPHUM);
         display.needsRedraw=true;
     } else display.mqttConnected=false;
 }
 
 void publishSensorData(){if(!mqtt.connected())return;char p[64];snprintf(p,64,"{\"co2\":%.0f}",lastValidCO2);mqtt.publish(MQTT_STATE_TOPIC,p);}
-void publishDeviceState(){if(!mqtt.connected())return;const char*scr[]={"Dashboard","Clock","HA Detail"};char p[192];snprintf(p,192,"{\"brightness\":%d,\"screen\":\"%s\",\"rssi\":%d}",display.brightness,scr[display.screen%NUM_SCREENS],WiFi.RSSI());mqtt.publish(MQTT_DEVICE_TOPIC,p);}
+void publishDeviceState(){
+    if(!mqtt.connected())return;
+    const char*scr[]={"Dashboard","Clock","HA Detail"};char p[512];
+    snprintf(p,512,"{\"brightness\":%d,\"screen\":\"%s\",\"rssi\":%d,\"al_door\":\"%s\",\"al_stairs\":\"%s\",\"al_windows\":\"%s\",\"al_co2\":\"%s\",\"al_temphum\":\"%s\"}",
+             display.brightness,scr[display.screen%NUM_SCREENS],WiFi.RSSI(),
+             enableAlertDoor?"ON":"OFF",enableAlertStairs?"ON":"OFF",enableAlertWindows?"ON":"OFF",enableAlertCO2?"ON":"OFF",enableAlertTempHum?"ON":"OFF");
+    mqtt.publish(MQTT_DEVICE_TOPIC,p);
+}
 void readSensor(){if(!scd30.dataAvailable())return;float c=scd30.getCO2();if((int)c!=CO2_INVALID_READING&&c>0&&c<10000)lastValidCO2=c;display.co2=lastValidCO2;}
 
 // ============================================================================
@@ -210,7 +251,7 @@ void checkAlerts() {
     if (!display.doorOpen) doorWasOpen = false;
     if (display.doorOpen) doorWasOpen = true;
 
-    if (doorAlertTime > 0 && (now - doorAlertTime) < DOOR_ALERT_MS && !isDismissed(AID_DOOR)) {
+    if (enableAlertDoor && doorAlertTime > 0 && (now - doorAlertTime) < DOOR_ALERT_MS && !isDismissed(AID_DOOR)) {
         display.setAlert(AT_ALARM, AID_DOOR, "DOOR OPEN!", "Door was opened!");
         return;
     }
@@ -221,20 +262,20 @@ void checkAlerts() {
     if (!display.stairMotion) { stairWasActive = false; stairAlertTime = 0; }
     if (display.stairMotion) stairWasActive = true;
 
-    if (stairAlertTime > 0 && (now - stairAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_STAIRS)) {
+    if (enableAlertStairs && stairAlertTime > 0 && (now - stairAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_STAIRS)) {
         display.setAlert(AT_WARN, AID_STAIRS, "STAIRS", "Movement detected!");
         return;
     }
     if (stairAlertTime > 0 && (now - stairAlertTime) >= TIMED_ALERT_MS) stairAlertTime = 0;
 
     // WARNING: CO2 too high
-    if (display.co2 >= CO2_POOR && !isDismissed(AID_CO2) && !justBooted) {
+    if (enableAlertCO2 && display.co2 >= CO2_POOR && !isDismissed(AID_CO2) && !justBooted) {
         display.setAlert(AT_WARN, AID_CO2, "CO2 HIGH!", "Open windows now!");
         return;
     }
 
     // WARNING: Temp out of warn range
-    if (display.temperature > -40) {
+    if (enableAlertTempHum && display.temperature > -40) {
         if ((display.temperature < TEMP_WARN_LOW || display.temperature > TEMP_WARN_HIGH) && !isDismissed(AID_TEMP)) {
             char m[40]; snprintf(m, 40, "Temp: %.1f C", display.temperature);
             display.setAlert(AT_WARN, AID_TEMP, "TEMP!", m);
@@ -243,7 +284,7 @@ void checkAlerts() {
     }
 
     // WARNING: Humidity out of warn range
-    if (display.humidity >= 0) {
+    if (enableAlertTempHum && display.humidity >= 0) {
         if ((display.humidity < HUM_WARN_LOW || display.humidity > HUM_WARN_HIGH) && !isDismissed(AID_HUM)) {
             char m[40]; snprintf(m, 40, "Humidity: %.0f%%", display.humidity);
             display.setAlert(AT_WARN, AID_HUM, "HUMIDITY!", m);
@@ -257,18 +298,18 @@ void checkAlerts() {
     if (!co2Mod) { co2InfoWasActive = false; co2InfoTime = 0; }
     if (co2Mod) co2InfoWasActive = true;
 
-    if (co2InfoTime > 0 && (now - co2InfoTime) < TIMED_ALERT_MS && !isDismissed(AID_CO2)) {
+    if (enableAlertCO2 && co2InfoTime > 0 && (now - co2InfoTime) < TIMED_ALERT_MS && !isDismissed(AID_CO2)) {
         display.setAlert(AT_INFO, AID_CO2, "CO2", "Consider ventilating");
         return;
     }
     if (co2InfoTime > 0 && (now - co2InfoTime) >= TIMED_ALERT_MS) co2InfoTime = 0;
 
     // INFO: Window open > 30 min → close
-    if (win1OpenTime > 0 && (now - win1OpenTime) > WIN_CLOSE_MS && !isDismissed(AID_WIN1_CLOSE)) {
+    if (enableAlertWindows && win1OpenTime > 0 && (now - win1OpenTime) > WIN_CLOSE_MS && !isDismissed(AID_WIN1_CLOSE)) {
         display.setAlert(AT_INFO, AID_WIN1_CLOSE, "WINDOW 1", "Close window!");
         return;
     }
-    if (win2OpenTime > 0 && (now - win2OpenTime) > WIN_CLOSE_MS && !isDismissed(AID_WIN2_CLOSE)) {
+    if (enableAlertWindows && win2OpenTime > 0 && (now - win2OpenTime) > WIN_CLOSE_MS && !isDismissed(AID_WIN2_CLOSE)) {
         display.setAlert(AT_INFO, AID_WIN2_CLOSE, "WINDOW 2", "Close window!");
         return;
     }
@@ -279,7 +320,7 @@ void checkAlerts() {
     if (!win1Good) { win1GoodWasActive = false; win1GoodAlertTime = 0; }
     if (win1Good) win1GoodWasActive = true;
 
-    if (win1GoodAlertTime > 0 && (now - win1GoodAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_WIN1_GOOD)) {
+    if (enableAlertWindows && win1GoodAlertTime > 0 && (now - win1GoodAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_WIN1_GOOD)) {
         display.setAlert(AT_INFO, AID_WIN1_GOOD, "WINDOW 1", "Great ventilation!");
         return;
     }
@@ -290,7 +331,7 @@ void checkAlerts() {
     if (!win2Good) { win2GoodWasActive = false; win2GoodAlertTime = 0; }
     if (win2Good) win2GoodWasActive = true;
 
-    if (win2GoodAlertTime > 0 && (now - win2GoodAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_WIN2_GOOD)) {
+    if (enableAlertWindows && win2GoodAlertTime > 0 && (now - win2GoodAlertTime) < TIMED_ALERT_MS && !isDismissed(AID_WIN2_GOOD)) {
         display.setAlert(AT_INFO, AID_WIN2_GOOD, "WINDOW 2", "Great ventilation!");
         return;
     }
