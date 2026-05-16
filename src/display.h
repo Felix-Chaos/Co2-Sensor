@@ -202,10 +202,10 @@ public:
             spr.drawString(alertMsg, (SW-tw)/2, 70);
         }
 
-        // Button hints
-        spr.setTextFont(1); spr.setTextColor(DIM, BG);
-        spr.drawString("<< Ignore Day", 8, 95);
-        spr.drawString("Ignore Week >>", SW-90, 95);
+        // Button hints (Right side, top and bottom buttons)
+        spr.setTextFont(1); spr.setTextColor(WHITE); // transparent background
+        spr.drawString("Ignore Day >", SW - 80, 20);
+        spr.drawString("Ignore Week >", SW - 85, 100);
 
         // Bottom bar
         spr.fillRect(0, SH-16, SW, 16, BG);
