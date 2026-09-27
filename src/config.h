@@ -59,6 +59,11 @@
 // Commands from HA
 #define MQTT_CMD_BRIGHTNESS     "cmnd/co2_sensor/brightness"
 #define MQTT_CMD_SCREEN         "cmnd/co2_sensor/screen"
+#define MQTT_CMD_CALIBRATE      "cmnd/co2_sensor/calibrate"
+#define MQTT_CMD_SNOOZE         "cmnd/co2_sensor/snooze"
+
+// Events published by the device (not retained)
+#define MQTT_EVENT_TOPIC        "tele/co2_sensor/event"
 
 // Alert toggles from HA
 #define MQTT_CMD_ALERT_DOOR     "cmnd/co2_sensor/alert/door"
@@ -73,6 +78,10 @@
 #define BTN_LEFT    0
 #define BTN_RIGHT   35
 #define NUM_SCREENS 3
+#define BTN_DEBOUNCE_MS     40      // ignore edges faster than this (contact bounce)
+#define BTN_HOLD_MS         600     // hold time to trigger long-press action
+#define SNOOZE_DURATION_MS  3600000UL  // 1 hour alert snooze
+#define BOOST_DURATION_MS   20000   // 20s full-brightness boost (combo hold)
 
 // ============================================================================
 //  Display & Brightness

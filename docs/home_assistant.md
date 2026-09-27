@@ -144,6 +144,7 @@ For `climate.*` entities, the state (`heat`) doesn't mean actively heating. The 
 | `tele/co2_sensor/device` | `{"brightness": 255, "screen": "Dashboard", "rssi": -62}` |
 | `tele/co2_sensor/sources` | Configured source entity IDs |
 | `tele/co2_sensor/availability` | `online` / `offline` |
+| `tele/co2_sensor/event` | One-shot events, e.g. `{"event":"co2_calibrated"}` (not retained) |
 
 ### Subscribed by the device
 
@@ -158,6 +159,20 @@ For `climate.*` entities, the state (`heat`) doesn't mean actively heating. The 
 | `co2_display/in/heating` | `heating`/`idle` |
 | `cmnd/co2_sensor/brightness` | `0`-`255` |
 | `cmnd/co2_sensor/screen` | `Dashboard`, `Clock`, `HA Detail` |
+| `cmnd/co2_sensor/snooze` | `on`/`off` — mute all alerts for 1 hour |
+| `cmnd/co2_sensor/calibrate` | any payload — forces the SCD30 to treat the current air as 400ppm |
+
+## Physical Button Controls
+
+The device also doubles as a Home Assistant remote: holding the buttons triggers the same actions as the `snooze`/`calibrate` topics above, and both are mirrored back as HA entities (auto-discovered):
+
+| Button | Tap | Hold (~0.6s) |
+|---|---|---|
+| Left | Previous screen / dismiss alert 24h | Toggle "Snooze Alerts" switch (1h) |
+| Right | Next screen / dismiss alert 7 days | Press "Calibrate CO2" button (fresh air required!) |
+| Both | — | Full brightness for 20s |
+
+**⚠️ Calibration note:** Forced recalibration tells the SCD30 the *current* reading is outdoor-fresh air (~400ppm). Only trigger it — from the device or from HA — when the sensor is actually outside or by an open window; otherwise you'll bias future readings.
 
 ## Troubleshooting
 

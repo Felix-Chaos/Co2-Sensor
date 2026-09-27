@@ -19,6 +19,8 @@ A real-time CO2 monitoring dashboard built on the **ESP32 TTGO T-Display**, inte
 | 🔔 **Alert System** | Lighthouse alarm (door), warnings (stairs, CO2, temp, hum), window timers |
 | 🏠 **HA Auto-Discovery** | Registers as a single MQTT device in Home Assistant |
 | ⚙️ **Remote Config** | Set sources, brightness, and screen from HA |
+| 🎯 **Remote CO2 Calibration** | Trigger a forced fresh-air recalibration from a button hold or an HA button entity |
+| 🔕 **Alert Snooze** | Mute alerts for 1 hour from a button hold or an HA switch entity |
 
 ## 📸 Screens
 
@@ -26,9 +28,9 @@ The display has **3 screens**, switchable via hardware buttons or Home Assistant
 
 <video src="docs/demo.mp4" width="400" controls="controls"></video>
 
-1. **Dashboard** — CO2 bar + temp/humidity + HA sensor grid
+1. **Dashboard** — CO2 arc gauge (zone-colored, with 5-min trend arrow), temp/humidity, two window tiles that change color while airing (blue → green after 5 min → pulsing orange after 30 min) with a live timer, plus door/heat/stairs chips
 2. **Clock** — Large clock with date and environmental summary
-3. **HA Detail** — Full-size HA sensor status with labels
+3. **HA Detail** — Large tiles for heating, door, stairs and both windows
 
 ## 🔔 Alerts (Day Hours Only)
 
@@ -43,6 +45,16 @@ The display has **3 screens**, switchable via hardware buttons or Home Assistant
 | Window open > 30 min | 🔵 INFO | "Close window!" |
 
 **Dismiss:** Left button = ignore for 24h · Right button = ignore for 7 days
+
+## 🕹️ Physical Buttons
+
+| Action | Left (GPIO 0) | Right (GPIO 35) |
+|---|---|---|
+| **Tap** | Previous screen (or dismiss alert 24h) | Next screen (or dismiss alert 7 days) |
+| **Hold ~0.6s** | Snooze all alerts for 1 hour ("DND" shown in status bar) | Force-calibrate the CO2 sensor to 400ppm (must be in fresh air!) |
+| **Hold both** | Full brightness for 20 seconds — handy to read the screen at night without waiting for a tap to wake it | |
+
+Every hold action shows a brief on-screen confirmation. Alert snooze and CO2 calibration can also be triggered remotely from Home Assistant (see below).
 
 ---
 

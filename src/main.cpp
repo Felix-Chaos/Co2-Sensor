@@ -21,8 +21,14 @@ unsigned long lastSensorRead=0,lastMqttPublish=0;
 unsigned long lastTimeUpdate=0,lastDisplayUpdate=0,lastDevicePublish=0;
 float lastValidCO2=0;
 
-bool btnLeftLast=HIGH,btnRightLast=HIGH;
-unsigned long btnLeftTime=0,btnRightTime=0;
+bool btnLeftLast=false,btnRightLast=false; // true = currently pressed (LOW)
+unsigned long btnLeftDownAt=0,btnRightDownAt=0;
+bool btnLeftHoldFired=false,btnRightHoldFired=false;
+bool btnComboFired=false;
+
+// Alert snooze ("Do Not Disturb", triggered by long-press or HA switch)
+bool alertsMuted=false;
+unsigned long muteUntil=0;
 
 // Source entity IDs
 char srcTemp[128]="",srcHum[128]="",srcStair[128]="";
@@ -30,7 +36,6 @@ char srcDoor[128]="",srcWin1[128]="",srcWin2[128]="",srcHeat[128]="";
 
 // Window open timers
 unsigned long win1OpenTime=0, win2OpenTime=0;
-bool win1WasOpen=false, win2WasOpen=false;
 
 // Door open tracking
 unsigned long doorOpenTime=0;
@@ -88,6 +93,7 @@ void setupTime(){configTime(GMT_OFFSET_SEC,DAYLIGHT_OFFSET_SEC,NTP_SERVER);}
 void updateTime(){struct tm ti;if(getLocalTime(&ti,100)){display.hour=ti.tm_hour;display.minute=ti.tm_min;display.weekday=ti.tm_wday;display.day=ti.tm_mday;display.month=ti.tm_mon;display.updateBrightness();display.needsRedraw=true;}}
 
 void publishDeviceState();
+void calibrateCO2();
 
 // ============================================================================
 //  MQTT Discovery
@@ -138,6 +144,14 @@ void publishDiscovery() {
         snprintf(p,512,"{\"name\":\"%s\",\"stat_t\":\"%s\",\"val_tpl\":\"{{ value_json.al_%s }}\",\"cmd_t\":\"%s\",\"uniq_id\":\"%s_al_%s\",\"ent_cat\":\"config\",\"icon\":\"mdi:bell\",\"avty_t\":\"%s\",%s}",sw[i].n,MQTT_DEVICE_TOPIC,sw[i].id,sw[i].tp,D,sw[i].id,A,devR);
         mqtt.publish(t,p,true);
     }
+
+    snprintf(t,128,"homeassistant/switch/%s/snooze/config",D);
+    snprintf(p,512,"{\"name\":\"Snooze Alerts\",\"stat_t\":\"%s\",\"val_tpl\":\"{{ value_json.snooze }}\",\"cmd_t\":\"%s\",\"uniq_id\":\"%s_snooze\",\"icon\":\"mdi:bell-sleep\",\"avty_t\":\"%s\",%s}",MQTT_DEVICE_TOPIC,MQTT_CMD_SNOOZE,D,A,devR);
+    mqtt.publish(t,p,true);
+
+    snprintf(t,128,"homeassistant/button/%s/calibrate/config",D);
+    snprintf(p,512,"{\"name\":\"Calibrate CO2\",\"cmd_t\":\"%s\",\"uniq_id\":\"%s_calibrate\",\"ent_cat\":\"config\",\"icon\":\"mdi:target\",\"avty_t\":\"%s\",%s}",MQTT_CMD_CALIBRATE,D,A,devR);
+    mqtt.publish(t,p,true);
 }
 
 void publishSources(){
@@ -176,6 +190,8 @@ void mqttCallback(char*topic,byte*payload,unsigned int length){
     else if(sT==MQTT_CMD_ALERT_WINDOWS){enableAlertWindows=active;savePref("alWindows",active?"1":"0");publishDeviceState();}
     else if(sT==MQTT_CMD_ALERT_CO2){enableAlertCO2=active;savePref("alCO2",active?"1":"0");publishDeviceState();}
     else if(sT==MQTT_CMD_ALERT_TEMPHUM){enableAlertTempHum=active;savePref("alTempHum",active?"1":"0");publishDeviceState();}
+    else if(sT==MQTT_CMD_SNOOZE){alertsMuted=active;muteUntil=active?millis()+SNOOZE_DURATION_MS:0;publishDeviceState();}
+    else if(sT==MQTT_CMD_CALIBRATE){calibrateCO2();}
     display.needsRedraw=true;
 }
 
@@ -195,6 +211,7 @@ void connectMQTT(){
         mqtt.subscribe("cmnd/co2_sensor/src_win1");mqtt.subscribe("cmnd/co2_sensor/src_win2");mqtt.subscribe("cmnd/co2_sensor/src_heat");
         mqtt.subscribe(MQTT_CMD_ALERT_DOOR);mqtt.subscribe(MQTT_CMD_ALERT_STAIRS);mqtt.subscribe(MQTT_CMD_ALERT_WINDOWS);
         mqtt.subscribe(MQTT_CMD_ALERT_CO2);mqtt.subscribe(MQTT_CMD_ALERT_TEMPHUM);
+        mqtt.subscribe(MQTT_CMD_SNOOZE);mqtt.subscribe(MQTT_CMD_CALIBRATE);
         display.needsRedraw=true;
     } else display.mqttConnected=false;
 }
@@ -203,12 +220,21 @@ void publishSensorData(){if(!mqtt.connected())return;char p[64];snprintf(p,64,"{
 void publishDeviceState(){
     if(!mqtt.connected())return;
     const char*scr[]={"Dashboard","Clock","HA Detail"};char p[512];
-    snprintf(p,512,"{\"brightness\":%d,\"screen\":\"%s\",\"rssi\":%d,\"al_door\":\"%s\",\"al_stairs\":\"%s\",\"al_windows\":\"%s\",\"al_co2\":\"%s\",\"al_temphum\":\"%s\"}",
+    snprintf(p,512,"{\"brightness\":%d,\"screen\":\"%s\",\"rssi\":%d,\"al_door\":\"%s\",\"al_stairs\":\"%s\",\"al_windows\":\"%s\",\"al_co2\":\"%s\",\"al_temphum\":\"%s\",\"snooze\":\"%s\"}",
              display.brightness,scr[display.screen%NUM_SCREENS],WiFi.RSSI(),
-             enableAlertDoor?"ON":"OFF",enableAlertStairs?"ON":"OFF",enableAlertWindows?"ON":"OFF",enableAlertCO2?"ON":"OFF",enableAlertTempHum?"ON":"OFF");
+             enableAlertDoor?"ON":"OFF",enableAlertStairs?"ON":"OFF",enableAlertWindows?"ON":"OFF",enableAlertCO2?"ON":"OFF",enableAlertTempHum?"ON":"OFF",
+             alertsMuted?"ON":"OFF");
     mqtt.publish(MQTT_DEVICE_TOPIC,p);
 }
 void readSensor(){if(!scd30.dataAvailable())return;float c=scd30.getCO2();if((int)c!=CO2_INVALID_READING&&c>0&&c<10000)lastValidCO2=c;display.co2=lastValidCO2;}
+
+// Forces the SCD30 to treat the current reading as fresh outdoor air (~400ppm).
+// Only accurate if the sensor is actually in fresh air when triggered.
+void calibrateCO2(){
+    bool ok=scd30.setForcedRecalibrationFactor(400);
+    display.showToast(ok?"CO2 Calibrated!":"Calibration Failed",2500);
+    if(mqtt.connected())mqtt.publish(MQTT_EVENT_TOPIC,"{\"event\":\"co2_calibrated\"}");
+}
 
 // ============================================================================
 //  Alert System
@@ -226,7 +252,23 @@ void dismissCurrent(bool forWeek) {
     display.clearAlert();
 }
 
+// Open-duration timers drive the window/door tiles, so track them even when alerts are suppressed
+void trackOpenTimes() {
+    unsigned long now = millis();
+    if (display.window1Open) { if (win1OpenTime == 0) win1OpenTime = now; } else win1OpenTime = 0;
+    if (display.window2Open) { if (win2OpenTime == 0) win2OpenTime = now; } else win2OpenTime = 0;
+    if (display.doorOpen)    { if (doorOpenTime == 0) doorOpenTime = now; } else doorOpenTime = 0;
+}
+
 void checkAlerts() {
+    trackOpenTimes();
+
+    // Snoozed via long-press or HA "Snooze Alerts" switch
+    if (alertsMuted) {
+        if (muteUntil > 0 && (long)(millis() - muteUntil) >= 0) { alertsMuted = false; publishDeviceState(); display.needsRedraw = true; }
+        else { display.clearAlert(); return; }
+    }
+
     // Only show alerts during day hours
     if (display.nightMode) { display.clearAlert(); return; }
 
@@ -234,17 +276,6 @@ void checkAlerts() {
     unsigned long now = millis();
     bool justBooted = (now < 15000); // 15s startup grace period
 
-    if (display.window1Open && !win1WasOpen) win1OpenTime = now;
-    if (!display.window1Open) win1OpenTime = 0;
-    win1WasOpen = display.window1Open;
-
-    if (display.window2Open && !win2WasOpen) win2OpenTime = now;
-    if (!display.window2Open) win2OpenTime = 0;
-    win2WasOpen = display.window2Open;
-
-    if (display.doorOpen && !doorWasOpen) doorOpenTime = now;
-    if (!display.doorOpen) doorOpenTime = 0;
-    
     // Check conditions in priority order (highest first)
     // ALARM: Door opened (10-second notification)
     if (display.doorOpen && !doorWasOpen && !justBooted) doorAlertTime = now; // rising edge
@@ -343,24 +374,70 @@ void checkAlerts() {
 
 // ============================================================================
 //  Buttons (context-dependent)
+//  Tap:   Left = prev screen / dismiss alert 1 day   Right = next screen / dismiss alert 1 week
+//  Hold:  Left = toggle alert snooze (1h)             Right = calibrate CO2 sensor (needs fresh air)
+//  Combo: Hold both = 20s full-brightness boost (handy at night)
 // ============================================================================
+void toggleSnooze() {
+    alertsMuted = !alertsMuted;
+    muteUntil = alertsMuted ? millis() + SNOOZE_DURATION_MS : 0;
+    display.showToast(alertsMuted ? "Alerts Snoozed 1h" : "Alerts Resumed", 2000);
+    publishDeviceState();
+}
+
 void handleButtons() {
     unsigned long now = millis();
-    bool l = digitalRead(BTN_LEFT);
-    if (l==LOW && btnLeftLast==HIGH && now-btnLeftTime>250) {
-        btnLeftTime = now;
-        if (display.alertActive) dismissCurrent(false); // dismiss for day
-        else display.prevScreen();
-    }
-    btnLeftLast = l;
+    static unsigned long lChg=0, rChg=0;
 
-    bool r = digitalRead(BTN_RIGHT);
-    if (r==LOW && btnRightLast==HIGH && now-btnRightTime>250) {
-        btnRightTime = now;
-        if (display.alertActive) dismissCurrent(true); // dismiss for week
-        else display.nextScreen();
+    bool lRaw = digitalRead(BTN_LEFT)==LOW;
+    bool rRaw = digitalRead(BTN_RIGHT)==LOW;
+    if (lRaw != btnLeftLast) { if (now-lChg < BTN_DEBOUNCE_MS) lRaw = btnLeftLast; else lChg = now; }
+    if (rRaw != btnRightLast) { if (now-rChg < BTN_DEBOUNCE_MS) rRaw = btnRightLast; else rChg = now; }
+    bool l = lRaw, r = rRaw;
+
+    // Press-down edges start the hold timer
+    if (l && !btnLeftLast) { btnLeftDownAt = now; btnLeftHoldFired = false; }
+    if (r && !btnRightLast) { btnRightDownAt = now; btnRightHoldFired = false; }
+
+    bool bothDown = l && r;
+
+    // Combo hold: only if neither side has already fired its own hold action
+    // (i.e. both buttons were pressed within BTN_HOLD_MS of each other)
+    if (bothDown && !btnComboFired && !btnLeftHoldFired && !btnRightHoldFired) {
+        unsigned long heldFor = now - max(btnLeftDownAt, btnRightDownAt);
+        if (heldFor >= BTN_HOLD_MS) {
+            btnComboFired = true; btnLeftHoldFired = true; btnRightHoldFired = true;
+            display.boostBrightness(BOOST_DURATION_MS);
+            display.showToast("Full Brightness", 1500);
+        }
     }
-    btnRightLast = r;
+
+    // Individual long-press (ignored while the other button is also down)
+    if (l && !r && !btnLeftHoldFired && (now-btnLeftDownAt) >= BTN_HOLD_MS) {
+        btnLeftHoldFired = true;
+        toggleSnooze();
+    }
+    if (r && !l && !btnRightHoldFired && (now-btnRightDownAt) >= BTN_HOLD_MS) {
+        btnRightHoldFired = true;
+        calibrateCO2();
+    }
+
+    // Release -> tap action (only if this press didn't already trigger a hold/combo)
+    if (!l && btnLeftLast) {
+        if (!btnLeftHoldFired && !btnComboFired) {
+            if (display.alertActive) dismissCurrent(false); // dismiss for day
+            else display.prevScreen();
+        }
+    }
+    if (!r && btnRightLast) {
+        if (!btnRightHoldFired && !btnComboFired) {
+            if (display.alertActive) dismissCurrent(true); // dismiss for week
+            else display.nextScreen();
+        }
+    }
+
+    if (!l && !r) btnComboFired = false;
+    btnLeftLast = l; btnRightLast = r;
 }
 
 // ============================================================================
@@ -384,6 +461,8 @@ void setup() {
 void loop() {
     unsigned long now=millis();
     handleButtons();
+    display.updateToast();
+    display.updateBoost();
 
     if(WiFi.status()!=WL_CONNECTED){display.wifiConnected=false;static unsigned long lr=0;if(now-lr>30000){lr=now;setupWiFi();}}
     else display.wifiConnected=true;
@@ -397,6 +476,8 @@ void loop() {
     if(now-lastMqttPublish>=MQTT_PUBLISH_INTERVAL){lastMqttPublish=now;publishSensorData();}
     if(now-lastDevicePublish>=60000){lastDevicePublish=now;publishDeviceState();}
     if(now-lastTimeUpdate>=60000){lastTimeUpdate=now;updateTime();}
+    static unsigned long lastTrendUpdate=0;
+    if(now-lastTrendUpdate>=300000){lastTrendUpdate=now;display.updateTrend();}
 
     // Check alerts every second
     static unsigned long lastAlertCheck=0;
