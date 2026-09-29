@@ -164,20 +164,24 @@ public:
     }
 
     // ---- Large icons (tiles) ----
-    // Casement window 24x22; when open the right sash is drawn swung inward.
-    void iconWindowL(int x,int y,bool open,uint16_t c){
+    // Closed casement window 24x22 (frame + cross muntin)
+    void iconWindowL(int x,int y,uint16_t c){
         spr.drawRect(x,y,24,22,c); spr.drawRect(x+1,y+1,22,20,c);
-        spr.fillRect(x+11,y,2,22,c);
-        if(!open){
-            spr.fillRect(x,y+10,24,2,c);
-        } else {
-            spr.fillRect(x+2,y+10,9,2,c);
-            for(int t=0;t<2;t++){
-                spr.drawLine(x+13,y+2+t,x+20,y+6+t,c);
-                spr.drawFastVLine(x+20-t,y+6,11,c);
-                spr.drawLine(x+13,y+19-t,x+20,y+16-t,c);
-            }
+        spr.fillRect(x+11,y,2,22,c); spr.fillRect(x,y+10,24,2,c);
+    }
+    // Open window 28x22: shutters swung out on both sides, breeze flowing through the empty frame
+    void iconWindowOpenL(int x,int y,uint16_t c,uint16_t bg){
+        spr.drawRect(x+4,y,20,22,c); spr.drawRect(x+5,y+1,18,20,c);
+        for(int side=0;side<2;side++){
+            int h=side?x+23:x+4, f=side?x+27:x, l=side?x+23:x;   // hinge edge, far edge, rect left
+            spr.fillRect(l,y+4,5,14,c);
+            spr.fillTriangle(f,y+4,h,y+1,h,y+4,c);
+            spr.fillTriangle(f,y+17,h,y+17,h,y+20,c);
+            spr.drawFastVLine(side?x+25:x+2,y+5,12,bg);
         }
+        spr.drawFastHLine(x+8,y+6,10,c);  spr.drawPixel(x+18,y+5,c); spr.drawPixel(x+19,y+4,c); spr.drawPixel(x+18,y+3,c);
+        spr.drawFastHLine(x+8,y+10,12,c);
+        spr.drawFastHLine(x+8,y+14,9,c);  spr.drawPixel(x+17,y+15,c); spr.drawPixel(x+18,y+16,c); spr.drawPixel(x+17,y+17,c);
     }
     // Door 16x24; when open the leaf swings out from the left hinge.
     void iconDoorL(int x,int y,bool open,uint16_t c){
@@ -278,7 +282,7 @@ public:
             switch(alertId) {
                 case AID_STAIRS: iconStairsL(cx-12,cy-10,accent); break;
                 case AID_WIN1_GOOD: case AID_WIN2_GOOD: iconCheck(cx-8,cy-8,accent); break;
-                case AID_WIN1_CLOSE: case AID_WIN2_CLOSE: iconWindowL(cx-12,cy-11,true,accent); break;
+                case AID_WIN1_CLOSE: case AID_WIN2_CLOSE: iconWindowOpenL(cx-14,cy-11,accent,CARD); break;
                 case AID_CO2: spr.setTextFont(2);spr.setTextColor(accent,CARD);spr.drawString("CO2",cx-13,cy-8); break;
                 case AID_TEMP: iconTherm(cx-3,cy-8,accent); break;
                 case AID_HUM: iconDrop(cx-4,cy-7,accent); break;
@@ -312,36 +316,18 @@ public:
         else               snprintf(out, len, "%luh%02lu", s / 3600, (s / 60) % 60);
     }
 
-    // Window airing state: 0 closed, 1 just opened, 2 good airing, 3 open too long
-    int windowState(bool open, unsigned long t) {
-        if (!open) return 0;
-        if (t == 0) return 1;
-        unsigned long e = millis() - t;
-        if (e > WIN_CLOSE_MS) return 3;
-        if (e > WIN_GOOD_MS) return 2;
-        return 1;
-    }
-    void windowColors(int s, uint16_t &fg, uint16_t &bg) {
-        switch (s) {
-            case 1:  fg=C_BLUE;   bg=C_DKBLUE;   break;
-            case 2:  fg=C_GREEN;  bg=C_DKGREEN;  break;
-            case 3:  fg=C_ORANGE; bg=C_DKORANGE; break;
-            default: fg=DIM;      bg=CARD;       break;
-        }
-    }
-
-    // Window tile: color tracks airing state, big timer while open, pulsing border when open too long
+    // Window tile: blue while open with a live timer, dim when closed
     void drawWindowTile(int x,int y,int w,int h,const char* label,bool open,unsigned long openTime){
-        int s=windowState(open,openTime); uint16_t fg,bg; windowColors(s,fg,bg);
+        uint16_t fg=open?C_BLUE:DIM, bg=open?C_DKBLUE:CARD;
         spr.fillRoundRect(x,y,w,h,6,bg);
-        if(s==3 && (millis()/1000)%2){spr.drawRoundRect(x,y,w,h,6,fg);spr.drawRoundRect(x+1,y+1,w-2,h-2,5,fg);}
-        spr.setTextFont(1);spr.setTextColor(fg,bg);spr.drawString(label,x+5,y+4);
-        iconWindowL(x+(w-24)/2,y+7,open,s?fg:DARK);
+        spr.setTextFont(1);spr.setTextColor(fg,bg);spr.drawString(label,x+4,y+3);
+        if(open) iconWindowOpenL(x+(w-28)/2,y+9,fg,bg);
+        else     iconWindowL(x+(w-24)/2,y+9,DARK);
         char tb[10];
         if(open){formatDuration(openTime,tb,sizeof(tb));spr.setTextFont(2);}
         else    {snprintf(tb,sizeof(tb),"closed");spr.setTextFont(1);}
         int tw=spr.textWidth(tb);
-        spr.drawString(tb,x+(w-tw)/2,open?y+h-19:y+h-13);
+        spr.drawString(tb,x+(w-tw)/2,open?y+h-18:y+h-12);
     }
 
     // Compact status chip (door / heat / stairs): lit with its color when active

@@ -51,74 +51,37 @@ trigger:
   - platform: time_pattern
     minutes: "/1"
     id: refresh
-  - platform: template
-    value_template: "{{ states(states('text.co2_sensor_ttgo_temp_source')) }}"
-    id: temp
-  - platform: template
-    value_template: "{{ states(states('text.co2_sensor_ttgo_humidity_source')) }}"
-    id: hum
-  - platform: template
-    value_template: "{{ states(states('text.co2_sensor_ttgo_stairs_source')) }}"
-    id: stair
-  - platform: template
-    value_template: "{{ states(states('text.co2_sensor_ttgo_door_source')) }}"
-    id: door
-  - platform: template
-    value_template: "{{ states(states('text.co2_sensor_ttgo_window_1_source')) }}"
-    id: win1
-  - platform: template
-    value_template: "{{ states(states('text.co2_sensor_ttgo_window_2_source')) }}"
-    id: win2
-  - platform: template
-    value_template: "{{ state_attr(states('text.co2_sensor_ttgo_heating_source'), 'hvac_action') }}"
-    id: heat
+  - platform: event
+    event_type: state_changed
+    id: change
+condition:
+  - condition: template
+    value_template: >
+      {{ trigger.id != 'change' or trigger.event.data.entity_id in [
+           states('text.co2_sensor_ttgo_temp_source'),
+           states('text.co2_sensor_ttgo_humidity_source'),
+           states('text.co2_sensor_ttgo_stairs_source'),
+           states('text.co2_sensor_ttgo_door_source'),
+           states('text.co2_sensor_ttgo_window_1_source'),
+           states('text.co2_sensor_ttgo_window_2_source'),
+           states('text.co2_sensor_ttgo_heating_source') ] }}
 action:
-  - choose:
-      - conditions: [{ condition: trigger, id: [init, refresh] }]
-        sequence:
-          - delay: { seconds: 5 }
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/temperature", payload: "{{ states(states('text.co2_sensor_ttgo_temp_source')) }}" }
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/humidity", payload: "{{ states(states('text.co2_sensor_ttgo_humidity_source')) }}" }
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/stairs", payload: "{{ states(states('text.co2_sensor_ttgo_stairs_source')) }}" }
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/door", payload: "{{ states(states('text.co2_sensor_ttgo_door_source')) }}" }
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/window1", payload: "{{ states(states('text.co2_sensor_ttgo_window_1_source')) }}" }
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/window2", payload: "{{ states(states('text.co2_sensor_ttgo_window_2_source')) }}" }
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/heating", payload: "{{ state_attr(states('text.co2_sensor_ttgo_heating_source'), 'hvac_action') }}" }
-      - conditions: [{ condition: trigger, id: temp }]
-        sequence:
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/temperature", payload: "{{ states(states('text.co2_sensor_ttgo_temp_source')) }}" }
-      - conditions: [{ condition: trigger, id: hum }]
-        sequence:
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/humidity", payload: "{{ states(states('text.co2_sensor_ttgo_humidity_source')) }}" }
-      - conditions: [{ condition: trigger, id: stair }]
-        sequence:
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/stairs", payload: "{{ states(states('text.co2_sensor_ttgo_stairs_source')) }}" }
-      - conditions: [{ condition: trigger, id: door }]
-        sequence:
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/door", payload: "{{ states(states('text.co2_sensor_ttgo_door_source')) }}" }
-      - conditions: [{ condition: trigger, id: win1 }]
-        sequence:
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/window1", payload: "{{ states(states('text.co2_sensor_ttgo_window_1_source')) }}" }
-      - conditions: [{ condition: trigger, id: win2 }]
-        sequence:
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/window2", payload: "{{ states(states('text.co2_sensor_ttgo_window_2_source')) }}" }
-      - conditions: [{ condition: trigger, id: heat }]
-        sequence:
-          - service: mqtt.publish
-            data: { topic: "co2_display/in/heating", payload: "{{ state_attr(states('text.co2_sensor_ttgo_heating_source'), 'hvac_action') }}" }
+  - if: [{ condition: trigger, id: init }]
+    then: [{ delay: { seconds: 5 } }]
+  - service: mqtt.publish
+    data: { topic: "co2_display/in/temperature", payload: "{{ states(states('text.co2_sensor_ttgo_temp_source')) }}" }
+  - service: mqtt.publish
+    data: { topic: "co2_display/in/humidity", payload: "{{ states(states('text.co2_sensor_ttgo_humidity_source')) }}" }
+  - service: mqtt.publish
+    data: { topic: "co2_display/in/stairs", payload: "{{ states(states('text.co2_sensor_ttgo_stairs_source')) }}" }
+  - service: mqtt.publish
+    data: { topic: "co2_display/in/door", payload: "{{ states(states('text.co2_sensor_ttgo_door_source')) }}" }
+  - service: mqtt.publish
+    data: { topic: "co2_display/in/window1", payload: "{{ states(states('text.co2_sensor_ttgo_window_1_source')) }}" }
+  - service: mqtt.publish
+    data: { topic: "co2_display/in/window2", payload: "{{ states(states('text.co2_sensor_ttgo_window_2_source')) }}" }
+  - service: mqtt.publish
+    data: { topic: "co2_display/in/heating", payload: "{{ state_attr(states('text.co2_sensor_ttgo_heating_source'), 'hvac_action') }}" }
 ```
 
 ### 3. How It Works
@@ -129,6 +92,8 @@ The automation uses a `states(states(...))` pattern:
 3. Publishes the result to the MQTT topic the display listens on
 
 When you change a source on the device page, the automation automatically follows the new entity.
+
+It listens to `state_changed` events filtered to the configured entities, so **every** transition (including `on` → `off`) is forwarded immediately. Don't use `template` triggers for this — they only fire when the template turns truthy, so a window or door closing would never be sent.
 
 ### Heating Note
 

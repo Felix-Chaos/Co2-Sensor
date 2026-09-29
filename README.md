@@ -28,7 +28,7 @@ The display has **3 screens**, switchable via hardware buttons or Home Assistant
 
 <video src="docs/demo.mp4" width="400" controls="controls"></video>
 
-1. **Dashboard** — CO2 arc gauge (zone-colored, with 5-min trend arrow), temp/humidity, two window tiles that change color while airing (blue → green after 5 min → pulsing orange after 30 min) with a live timer, plus door/heat/stairs chips
+1. **Dashboard** — CO2 arc gauge (zone-colored, with 5-min trend arrow), temp/humidity, two window tiles that light up blue with an open-window icon and a live timer while open, plus door/heat/stairs chips
 2. **Clock** — Large clock with date and environmental summary
 3. **HA Detail** — Large tiles for heating, door, stairs and both windows
 
